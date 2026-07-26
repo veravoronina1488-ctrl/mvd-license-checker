@@ -1,0 +1,7 @@
+const express = require('express');
+const pool = require('../config/database');
+const {authenticate, authorize} = require('../middleware/auth');
+const router = express.Router();
+router.get('/search', async (req, res) => {try {const {license_number} = req.query;if (!license_number) return res.status(400).json({error: 'License number required'});const driver = (await pool.query('SELECT * FROM drivers WHERE license_number = $1', [license_number])).rows[0];if (!driver) return res.status(404).json({error: 'Not found'});const categories = (await pool.query('SELECT * FROM license_categories WHERE driver_id = $1', [driver.id])).rows;const fines = (await pool.query('SELECT * FROM fines WHERE driver_id = $1', [driver.id])).rows;res.json({driver, categories, fines, statistics: {total_fines: fines.length, unpaid_fines: fines.filter(f => f.status === 'unpaid').length}})} catch (err) {res.status(500).json({error: 'Search failed'})}});
+router.post('/', authenticate, authorize(['admin']), async (req, res) => {try {const result = await pool.query('INSERT INTO drivers (license_number, first_name, last_name, date_of_birth, issue_date, expiry_date) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *', [req.body.license_number, req.body.first_name, req.body.last_name, req.body.date_of_birth, req.body.issue_date, req.body.expiry_date]);res.status(201).json(result.rows[0])} catch (err) {res.status(500).json({error: 'Failed to create driver'})}});
+module.exports = router;
